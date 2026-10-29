@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8080:80"
-    container_name: markdown-viewer
+    # Coolify's proxy connects over the Docker network; do not bind a host port.
+    expose:
+      - "80"
     restart: unless-stopped

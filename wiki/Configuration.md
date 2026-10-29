@@ -192,7 +192,7 @@ See [Live Share](Live-Share-Cloudflare.md) for runtime flow and limits.
 
 ## Docker and Nginx
 
-The root Docker build serves static files with Nginx on port 80. The repository includes `docker-compose.yml` exposing `8080:80`.
+The root Docker build serves static files with Nginx on port 80. The default `docker-compose.yml` exposes container port 80 for a reverse proxy without binding a host port. For standalone local access, add `-f docker-compose.local.yml` after `-f docker-compose.yml`; the optional override publishes `127.0.0.1:8080:80` (change the local port with `MARKDOWN_VIEWER_PORT`).
 
 Security headers configured in Docker/Nginx documentation include:
 

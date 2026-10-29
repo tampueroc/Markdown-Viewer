@@ -57,17 +57,21 @@ docker run -d \
 
 Open `http://localhost:8080`.
 
-Using Compose from the repository root:
+Using Compose for standalone local access from the repository root:
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
-To rebuild from local source:
+Open `http://localhost:8080`. To use a different local port, prefix the command with `MARKDOWN_VIEWER_PORT=8081`.
+
+For Coolify or another reverse proxy on the Docker network, use only the default Compose file:
 
 ```bash
 docker compose up -d --build
 ```
+
+The default file exposes container port **80** without publishing a host port. Assign the application domain to the `markdown-viewer` service in your proxy.
 
 The Docker image serves static files with Nginx. It does not magically provide Cloudflare KV or Durable Objects; deploy those separately if you want stored Share Snapshot or Live Share.
 

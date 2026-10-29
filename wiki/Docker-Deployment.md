@@ -22,11 +22,13 @@ The repository includes:
 services:
   markdown-viewer:
     build: .
-    ports:
-      - "8080:80"
+    expose:
+      - "80"
 ```
 
-Run:
+The default configuration is for Coolify or another reverse proxy on the Docker network. It publishes no host ports and does not reserve a fixed container name, avoiding conflicts with other applications or deployment instances. In Coolify, assign the domain to the `markdown-viewer` service and target container port **80**.
+
+Run behind your proxy:
 
 ```bash
 docker compose up -d
@@ -38,10 +40,21 @@ Rebuild after local source changes:
 docker compose up -d --build
 ```
 
-Stop:
+For standalone local access without a proxy, explicitly add the local override:
 
 ```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+```
+
+Open `http://localhost:8080`. The override binds loopback only; it is not used by Coolify. If port 8080 is occupied, prefix that command with `MARKDOWN_VIEWER_PORT=8081` and open `http://localhost:8081` instead.
+
+Stop using the same files you started with:
+
+```bash
+# Proxy deployment
 docker compose down
+# Standalone local deployment
+docker compose -f docker-compose.yml -f docker-compose.local.yml down
 ```
 
 ## Building Locally
@@ -105,7 +118,7 @@ Coolify targets Linux, not native macOS. If the Mac mini runs macOS, use a suppo
 2. Set the application port to **80**. If configuring a health check, use HTTP `GET /` on port 80.
 3. Assign a dedicated root hostname, such as `markdown.home.example.com`, resolving to the Coolify host's LAN address. Replace this example with a domain you control.
 4. Terminate **trusted HTTPS** at Coolify's proxy. Use a DNS-validated certificate for your domain or a private CA trusted by every client device. A private-CA certificate without client trust is not sufficient. HTTP on a LAN IP is not a browser secure context; PWA/service workers, encrypted workspaces, and some clipboard features require HTTPS.
-5. Do not expose a separate public application port or forward router ports unless you intend external access. The Compose file's `8080:80` mapping is for standalone deployment, not needed behind Coolify's application proxy.
+5. Do not expose a separate public application port or forward router ports unless you intend external access. If using Coolify's **Docker Compose** build pack instead, use only `/docker-compose.yml`, assign the domain to the `markdown-viewer` service, and target port **80**. Do not include `docker-compose.local.yml`; that override is only for direct local access. If you previously edited Compose in Coolify, reload the configuration from the repository so an old `8080:80` mapping is not retained.
 
 No database, application environment variables, or persistent volume are required. Workspace documents remain in each browser's IndexedDB, **not on the Mac mini**. Different devices and browser profiles do not share a persistent workspace. Back up through workspace ZIP exports; container or VM backups do not capture client browser documents. Keep the hostname, scheme, and port stable because browser storage is origin-specific.
 

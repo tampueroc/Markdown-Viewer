@@ -56,6 +56,14 @@ test('Nginx revalidates unversioned assets and does not hide missing files behin
   assert.ok(dockerfile.includes('RUN nginx -t'));
 });
 
+test('default Compose leaves host ports and container names to the deployment platform', () => {
+  const compose = read('docker-compose.yml');
+  assert.doesNotMatch(compose, /^\s*(?:ports|container_name):/m);
+  assert.match(compose, /expose:\s*\n\s*- "80"/);
+  const local = read('docker-compose.local.yml');
+  assert.match(local, /ports:\s*\n\s*- "127\.0\.0\.1:\$\{MARKDOWN_VIEWER_PORT:-8080\}:80"/);
+});
+
 test('published images target both Intel and Apple Silicon Linux hosts', () => {
   assert.match(read('.github/workflows/docker-publish.yml'), /platforms: linux\/amd64,linux\/arm64/);
 });
