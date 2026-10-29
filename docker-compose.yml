@@ -9,3 +9,33 @@ services:
     expose:
       - "80"
     restart: unless-stopped
+    depends_on:
+      workspace-api:
+        condition: service_healthy
+    networks:
+      - default
+      - workspace-private
+
+  workspace-api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    expose:
+      - "3000"
+    restart: unless-stopped
+    environment:
+      WORKSPACE_PUBLIC_ORIGIN: "${WORKSPACE_PUBLIC_ORIGIN:?Set WORKSPACE_PUBLIC_ORIGIN to the browser HTTPS origin}"
+      WORKSPACE_TOKENS_JSON: "${WORKSPACE_TOKENS_JSON:-}"
+      WORKSPACE_DATABASE: /data/workspaces.sqlite
+    volumes:
+      - workspace-data:/data
+    networks:
+      - workspace-private
+
+volumes:
+  workspace-data:
+
+networks:
+  default:
+  workspace-private:
+    internal: true

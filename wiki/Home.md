@@ -17,6 +17,7 @@ Most editing and rendering happens on the device. Managed media, GitHub import, 
 | Run the web app, PWA, Docker, Cloudflare, or desktop build | [Installation](Installation.md) |
 | Configure storage, libraries, limits, or Cloudflare bindings | [Configuration](Configuration.md) |
 | Deploy behind Docker and a reverse proxy | [Docker Deployment](Docker-Deployment.md) |
+| Share persistent workspaces with browsers and agents | [Server Workspaces, REST API, and MCP](Server-Workspaces.md) |
 | Build or operate the Neutralino application | [Desktop Application](Desktop-App.md) |
 | Fix a problem | [Troubleshooting](Troubleshooting.md) or [FAQ](FAQ.md) |
 | Contribute code, documentation, or a translation | [Contributing](../CONTRIBUTING.md) |
@@ -46,7 +47,7 @@ Other supported entry points:
 | Desktop development | Run `npm install` and `npm run dev` in `desktop-app/` |
 | Desktop build | Run `npm run build` in `desktop-app/` |
 
-See [Installation](Installation.md) before deploying. The stock Docker image has a documented Worker/PWA packaging limitation.
+See [Installation](Installation.md) before deploying. Compose requires server workspace origin/token configuration; a standalone static image continues to support browser-local use.
 
 ## Product Boundaries
 
@@ -64,7 +65,7 @@ The public root and 14 translated `?lang=` URLs serve language-matched initial c
 
 ## Privacy at a Glance
 
-- Web documents are local per-document IndexedDB records; desktop documents are ordinary `.md` files in a durable vault.
+- Browser-local documents are per-document IndexedDB records; desktop documents are ordinary `.md` files in a durable vault. Opt-in server workspaces persist Markdown in server-side SQLite and require separate volume backups.
 - Private mode pauses new Document-state persistence for the current page session while keeping existing normal and Secret Workspace data; reload or exit resets it.
 - Deleted normal and encrypted files remain in Trash for 30 days unless restored or permanently deleted sooner.
 - **Storage and Backup** exports or restores a folder-preserving ZIP and can retain Secret Workspace ciphertext.

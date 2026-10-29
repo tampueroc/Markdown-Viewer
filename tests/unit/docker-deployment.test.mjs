@@ -64,6 +64,19 @@ test('default Compose leaves host ports and container names to the deployment pl
   assert.match(local, /ports:\s*\n\s*- "127\.0\.0\.1:\$\{MARKDOWN_VIEWER_PORT:-8080\}:80"/);
 });
 
+test('Compose persists the authenticated API privately and Nginx proxies only workspace routes', () => {
+  const compose = read('docker-compose.yml');
+  assert.match(compose, /dockerfile: server\/Dockerfile/);
+  assert.match(compose, /workspace-data:\/data/);
+  assert.match(compose, /WORKSPACE_PUBLIC_ORIGIN/);
+  assert.match(compose, /WORKSPACE_TOKENS_JSON/);
+  assert.match(compose, /condition: service_healthy/);
+  assert.match(compose, /workspace-private:\s*\n\s*internal: true/);
+  for (const route of ['location = /api/workspaces', 'location ^~ /api/workspaces/', 'location = /mcp']) assert.ok(nginx.includes(route));
+  assert.match(read('server/nginx-workspace-proxy.conf'), /set \$workspace_backend workspace-api:3000/);
+  assert.match(read('server/Dockerfile'), /USER node/);
+});
+
 test('published images target both Intel and Apple Silicon Linux hosts', () => {
   assert.match(read('.github/workflows/docker-publish.yml'), /platforms: linux\/amd64,linux\/arm64/);
 });

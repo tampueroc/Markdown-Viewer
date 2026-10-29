@@ -156,6 +156,9 @@ function downloadFile(url, destPath, expectedSha384) {
 async function prepareOfflineDependencies() {
   console.log("\nStarting Secure Offline Assets Preparation...");
   let html = fs.readFileSync(path.join(ROOT_DIR, "index.html"), "utf-8");
+  // Server workspaces are a same-origin web/Compose feature, not a native vault.
+  html = html.replace(/\s*<link rel="stylesheet" href="server-workspaces\.css">/g, "");
+  html = html.replace(/\s*<script src="server-workspaces\.js" defer><\/script>/g, "");
   
   // Find all CDN script and link tags that match standard script/stylesheet declarations
   const tagRegex = /<(link|script)[^>]+(?:href|src)="https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)\/[^"]+"[^>]*>/g;

@@ -29,7 +29,13 @@ jobs:
     - name: Check Docker deployment contracts
       run: node --test tests/unit/docker-deployment.test.mjs
 
-    - name: Smoke test the web container
+    - name: Install test dependencies
+      run: npm ci --ignore-scripts
+
+    - name: Test workspace API, permissions and MCP
+      run: node --test tests/unit/server-workspaces.test.mjs tests/unit/server-workspace-cache.test.mjs
+
+    - name: Smoke test web, API, MCP and persistent storage
       run: node tests/helpers/docker-smoke-check.mjs
 
     - name: Set up QEMU

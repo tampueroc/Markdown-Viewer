@@ -48,6 +48,9 @@ for (const relativePath of requiredFiles) {
 
 const syntaxCheckedFiles = [
   'src/document-toc.mjs',
+  'server-workspaces.js',
+  'server/main.mjs',
+  'server/workspaces.mjs',
   'assets/document-toc.js',
   'script.js',
   'workspace-storage.js',

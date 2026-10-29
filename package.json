@@ -4,10 +4,11 @@
   "private": true,
   "description": "Development and automated testing tools for Markdown Viewer.",
   "engines": {
-    "node": ">=22 <27"
+    "node": ">=22.13 <27"
   },
   "scripts": {
     "start": "node tests/helpers/static-server.mjs",
+    "start:workspaces": "node server/main.mjs",
     "dev": "node tests/helpers/static-server.mjs",
     "build": "npm run build:toc && npm run check:static && npm run check:seo",
     "build:toc": "node scripts/build-document-toc.mjs",
@@ -45,5 +46,9 @@
     "mathjax-asana-font": "4.0.0-beta.7",
     "mathjax-stix2-font": "4.0.0-beta.7",
     "pako": "2.1.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
   }
 }

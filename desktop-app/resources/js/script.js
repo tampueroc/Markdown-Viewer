@@ -11698,6 +11698,11 @@ document.addEventListener("DOMContentLoaded", async function () {
       private: { icon: 'lucide lucide-hat-glasses', text: 'Private mode is on' },
       error: { icon: 'lucide lucide-circle-alert', text: 'Changes not saved' }
     }[nextState];
+    if (activeDocument && activeDocument.serverDocument) {
+      const remote = getServerDocumentSnapshot(activeDocument);
+      presentation.text = remote.dirty ? 'Server draft not saved · Ctrl+S' : 'Server revision ' + remote.revision + ' saved';
+      presentation.icon = remote.dirty ? 'lucide lucide-circle-alert' : 'lucide lucide-check';
+    }
     saveStatus.classList.remove('is-saving', 'is-saved', 'is-private', 'is-error');
     saveStatus.classList.add('is-' + nextState);
     saveStatus.classList.toggle('is-linked-conflict', nextState === 'saved' && linkedConflict);
@@ -11868,6 +11873,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     if (workspaceMaintenancePending || suspendWorkspacePersistence) throw new Error('Workspace maintenance is already active. Reload or wait before retrying.');
     if (nativeMarkdownSaveInProgress) throw new Error('A file Save is still in progress. Wait for it to finish, then retry.');
     if (liveCollaboration) throw new Error('Leave the live collaboration session before replacing the workspace.');
+    if (tabs.some(function(tab) { return getServerDocumentSnapshot(tab)?.dirty; })) throw new Error('Save or close unsaved server documents before replacing the local workspace.');
     workspaceMaintenancePending = true;
     const container = document.querySelector('.app-container');
     workspaceMaintenancePreviousInert = !!(container && container.inert);
@@ -11903,7 +11909,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   // explicitly awaits this hook before exiting.
   window.addEventListener('beforeunload', function(event) {
     flushWorkspaceBeforeExit().catch(function() {});
-    if (emergencySavePendingCount > 0 || secretJournalPendingCount > 0) {
+    if (emergencySavePendingCount > 0 || secretJournalPendingCount > 0 || tabs.some(function(tab) { return getServerDocumentSnapshot(tab)?.dirty; })) {
       event.preventDefault();
       event.returnValue = '';
     }
@@ -13546,6 +13552,9 @@ document.addEventListener("DOMContentLoaded", async function () {
       return;
     }
 
+    if (tabs.some(function(tab) { return idsToClose.has(tab.id) && getServerDocumentSnapshot(tab)?.dirty; }) &&
+        !window.confirm('Close server documents with unsaved changes? These drafts are not saved locally.')) return;
+
     const openTabsBeforeClose = getOpenTabs();
     const activeOpenIndex = openTabsBeforeClose.findIndex(function(tab) { return tab.id === activeTabId; });
     const activeWillClose = idsToClose.has(activeTabId);
@@ -14208,7 +14217,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     documentSplitEditor.hidden = previewMode;
     documentSplitPreview.hidden = !previewMode;
     if (documentSplitEditor.value !== tab.content) documentSplitEditor.value = tab.content || '';
-    documentSplitEditor.readOnly = shareSnapshotViewOnlyTabIds.has(tab.id) || isReleaseNotesTab(tab);
+    documentSplitEditor.readOnly = shareSnapshotViewOnlyTabIds.has(tab.id) || isReleaseNotesTab(tab) || tab.serverDocument?.readOnly === true;
     documentSplitEditor.setAttribute('aria-label', 'Edit ' + (tab.title || 'Untitled') + ' in split view');
     documentSplitPreview.setAttribute('aria-label', 'Preview ' + (tab.title || 'Untitled') + ' in split view');
     if (previewMode) renderDocumentSplitPreview(tab);
@@ -14501,6 +14510,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     let splitPartnerId = wasActive ? secondarySplitTabId : null;
     if (wasActive) saveCurrentTabState();
     saveSecondarySplitState();
+    if (getServerDocumentSnapshot(tab)?.dirty && !window.confirm('Close this server document with unsaved changes? Its draft is not saved locally.')) return false;
     if (!isTemporaryDocument(tab) && tab.workspaceId !== SECRET_WORKSPACE_ID && workspaceStorage && !isPrivateStorageMode()) {
       const saved = await _flushTabsToStorage(tabs);
       if (!saved) {
@@ -14627,6 +14637,10 @@ document.addEventListener("DOMContentLoaded", async function () {
   function renameTab(tabId) {
     const tab = tabs.find(function(t) { return t.id === tabId; });
     if (!tab) return;
+    if (tab.serverDocument) {
+      showAppToast('Rename server document paths through the workspace API or MCP, then reload the clean document.', { tone: 'info', title: 'Server document' });
+      return;
+    }
     const modal = document.getElementById('rename-modal');
     const input = document.getElementById('rename-modal-input');
     const confirmBtn = document.getElementById('rename-modal-confirm');
@@ -30440,7 +30454,7 @@ ${selector} .arrowheadPath {
   }
 
   function canMutateEditor() {
-    return hasActiveOpenDocument() && !reviewModeActive && !isLiveViewOnlyParticipant() && !isShareSnapshotViewOnlyActive() && !isReleaseNotesActive();
+    return hasActiveOpenDocument() && !reviewModeActive && !isLiveViewOnlyParticipant() && !isShareSnapshotViewOnlyActive() && !isReleaseNotesActive() && !tabs.find(function(tab) { return tab.id === activeTabId; })?.serverDocument?.readOnly;
   }
 
   function isLiveMutatingAction(action) {
@@ -30579,7 +30593,7 @@ ${selector} .arrowheadPath {
     const viewOnly = isLiveViewOnlyParticipant() || snapshotViewOnly || releaseNotesActive;
     document.body.classList.toggle('release-notes-active', releaseNotesActive);
     if (!releaseNotesActive) updateReleaseNotesActionAvailability(false);
-    const sourceReadOnly = viewOnly || reviewModeActive;
+    const sourceReadOnly = viewOnly || reviewModeActive || tabs.find(function(tab) { return tab.id === activeTabId; })?.serverDocument?.readOnly === true;
     if (markdownEditor) {
       markdownEditor.readOnly = sourceReadOnly;
       markdownEditor.setAttribute('aria-readonly', sourceReadOnly ? 'true' : 'false');
@@ -32707,7 +32721,9 @@ ${selector} .arrowheadPath {
 
     if (isCmdOrCtrl && !e.shiftKey && !e.altKey && !e.isComposing && (key === 's' || e.code === 'KeyS')) {
       e.preventDefault();
-      if (hasDesktopFileAccess()) nativeSaveMarkdown({ useLinkedSource: true,
+      const saveTabId = e.target === documentSplitEditor && secondarySplitTabId ? secondarySplitTabId : activeTabId;
+      if (tabs.find(function(tab) { return tab.id === saveTabId; })?.serverDocument) window.dispatchEvent(new CustomEvent('markdown-viewer:save-server-document', { detail: { tabId: saveTabId } }));
+      else if (hasDesktopFileAccess()) nativeSaveMarkdown({ useLinkedSource: true,
         tabId: e.target === documentSplitEditor && secondarySplitTabId ? secondarySplitTabId : activeTabId });
       else exportMd.click();
     }
@@ -35230,11 +35246,14 @@ ${selector} .arrowheadPath {
 
   // Register Service Worker for offline capabilities
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
+    const registerServiceWorker = function() {
       navigator.serviceWorker.register('sw.js').catch(function(err) {
         console.log('ServiceWorker registration failed: ', err);
       });
-    });
+    };
+    // Async workspace startup may finish after the window load event fired.
+    if (document.readyState === 'complete') registerServiceWorker();
+    else window.addEventListener('load', registerServiceWorker, { once: true });
   }
 
   // Wait until all editor and collaboration dependencies exist before adding the update tab.
@@ -35253,6 +35272,59 @@ ${selector} .arrowheadPath {
     // Optional theme/font downloads must not delay workspace readiness.
     applyVisualSettings(initialVisualSettings, '*');
   }
+
+  // Server documents are explicitly opened, temporary editor sessions. Their
+  // Markdown is saved only through the authenticated server API, never IndexedDB.
+  function getServerDocumentSnapshot(tab) {
+    if (!tab || !tab.serverDocument) return null;
+    const content = tab.id === activeTabId ? markdownEditor.value
+      : tab.id === secondarySplitTabId && documentSplitEditor ? documentSplitEditor.value : tab.content;
+    return Object.assign({}, tab.serverDocument, { tabId: tab.id, content: content, dirty: content !== tab.serverDocument.content });
+  }
+
+  window.MarkdownViewerServerDocuments = Object.freeze({
+    active: function() { return getServerDocumentSnapshot(tabs.find(function(tab) { return tab.id === activeTabId; })); },
+    snapshots: function() { return tabs.map(getServerDocumentSnapshot).filter(Boolean); },
+    snapshot: function(tabId) { return getServerDocumentSnapshot(tabs.find(function(tab) { return tab.id === tabId; })); },
+    open: async function(doc) {
+      const title = '[Server] ' + (doc.workspaceName ? doc.workspaceName + ' / ' : '') + doc.path;
+      let tab = tabs.find(function(item) { return item.serverDocument && item.serverDocument.id === doc.id && item.serverDocument.workspace_id === doc.workspace_id; });
+      if (tab && getServerDocumentSnapshot(tab).dirty) throw new Error('This document has an unsaved draft. Save it or close its tab before reloading.');
+      if (tab && (tab.id === secondarySplitTabId || (tab.id === activeTabId && secondarySplitTabId))) closeDocumentSplitView({ silent: true, renderTabs: false });
+      if (!tab) {
+        tab = createTab(doc.content, title, 'split', { workspaceId: DEFAULT_WORKSPACE_ID, folderId: null });
+        tab.kind = 'server-document';
+        tab.temporary = true;
+        tabs.push(tab);
+      }
+      tab.content = doc.content;
+      tab.contentLoaded = true;
+      tab.title = title;
+      tab.serverDocument = Object.assign({}, doc);
+      if (tab.id === activeTabId) {
+        markdownEditor.value = doc.content;
+        initTabHistory(tab.id, doc.content);
+        renderMarkdown();
+      } else await switchTab(tab.id);
+      updateLiveEditorAccess();
+      renderTabBar(tabs, activeTabId);
+      renderDocumentSidebar();
+      updateSaveStatus('saved');
+      return getServerDocumentSnapshot(tab);
+    },
+    saved: function(tabId, doc) {
+      const tab = tabs.find(function(item) { return item.id === tabId; });
+      if (!tab || !tab.serverDocument || tab.serverDocument.id !== doc.id || tab.serverDocument.workspace_id !== doc.workspace_id) return;
+      // Only advance the saved baseline. Typing during the request stays dirty.
+      tab.serverDocument = Object.assign({}, tab.serverDocument, doc);
+      updateSaveStatus('saved');
+    },
+    disconnect: function() {
+      const remote = tabs.filter(function(tab) { return tab.serverDocument; });
+      if (remote.some(function(tab) { return getServerDocumentSnapshot(tab).dirty; })) throw new Error('Save or close unsaved server documents before disconnecting.');
+      closeTabsInBatch(remote.map(function(tab) { return tab.id; }));
+    }
+  });
 
   document.documentElement.dataset.appReady = 'true';
   window.dispatchEvent(new Event('markdown-viewer:ready'));

@@ -57,13 +57,15 @@ docker run -d \
 
 Open `http://localhost:8080`.
 
+For Compose, first configure `WORKSPACE_PUBLIC_ORIGIN` and secret `WORKSPACE_TOKENS_JSON` as described in [Server Workspaces](Server-Workspaces.md). Compose now includes an authenticated workspace API and a persistent SQLite volume; the standalone image above remains browser-local-only.
+
 Using Compose for standalone local access from the repository root:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
-Open `http://localhost:8080`. To use a different local port, prefix the command with `MARKDOWN_VIEWER_PORT=8081`.
+Use `WORKSPACE_PUBLIC_ORIGIN=http://localhost:8080` and open that URL. For a different local port, set both `MARKDOWN_VIEWER_PORT=8081` and `WORKSPACE_PUBLIC_ORIGIN=http://localhost:8081`.
 
 For Coolify or another reverse proxy on the Docker network, use only the default Compose file:
 
@@ -83,8 +85,13 @@ Serve at least these root files:
 
 - `index.html`
 - `workspace-storage.js`
+- `native-markdown-source.js`
+- `visual-settings-adapters.js`
+- `visual-settings-store.js`
 - `script.js`
 - `styles.css`
+- `server-workspaces.js`
+- `server-workspaces.css`
 - `preview-worker.js`
 - `sw.js`
 - `sample.md`

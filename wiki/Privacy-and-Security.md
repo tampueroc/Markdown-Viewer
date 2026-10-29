@@ -4,7 +4,7 @@ Markdown Viewer is local-first: normal editing, Preview rendering, local file im
 
 ## Privacy Summary
 
-- No account or login is required.
+- No account or login is required for browser-local use. Opt-in server workspaces require an operator-provided bearer token.
 - The application code does not implement analytics, telemetry, advertising, tracking pixels, or app-specific cookies.
 - Normal web documents are stored as per-document IndexedDB records; desktop documents are ordinary files in a durable vault.
 - Private mode disables new document-state persistence without deleting existing persisted documents.
@@ -14,6 +14,12 @@ Markdown Viewer is local-first: normal editing, Preview rendering, local file im
 - Live Share is not end-to-end encrypted.
 
 > **Privacy:** Do not place sensitive Markdown in a remote-rendered diagram, managed-media upload, stored Share Snapshot, or Live Share room unless you accept the stated service and bearer-link boundaries.
+
+## Opt-in Server Workspaces
+
+The self-hosted Compose deployment also supports authenticated [Server Workspaces](Server-Workspaces.md). Explicitly opened server documents are stored as plaintext SQLite on your server, not in browser IndexedDB. Saves send Markdown over the network; server workspaces are not end-to-end encrypted. Remote drafts and bearer tokens are kept in page memory only, without local recovery or inclusion in browser ZIP backups. Back up the server volume separately.
+
+Tokens have workspace scopes and read/write/admin roles. Treat them as passwords, use trusted HTTPS, and rotate/revoke through server configuration. API/MCP responses bypass the Service Worker and use `no-store`. Private mode pauses local persistence, not explicit server saves. Comments, assets, Secret Workspace files, and editor sessions are not synchronized by this first version.
 
 ## Data Stored on the Device
 

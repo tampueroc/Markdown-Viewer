@@ -1,0 +1,21 @@
+#server-workspace-ui { font: 14px/1.5 system-ui, sans-serif; }
+#server-workspace-launcher { position: fixed; right: 1rem; bottom: 2.5rem; z-index: 1040; border-radius: .6rem; padding: .4rem .8rem; }
+#server-workspace-ui button, #server-workspace-ui input, #server-workspace-ui select { font: inherit; padding: .4rem .6rem; border: 1px solid #888; border-radius: .4rem; }
+#server-workspace-ui button { color: #17202a; background: #f3f5f7; cursor: pointer; }
+#server-workspace-ui button:disabled { opacity: .6; cursor: default; }
+#server-workspace-ui input, #server-workspace-ui select { color: #17202a; background: white; min-width: 0; }
+#server-workspace-ui [hidden] { display: none !important; }
+#server-workspace-dialog { width: min(700px, 95vw); max-height: 85vh; padding: 1.25rem; border: 1px solid #888; border-radius: .75rem; color: #17202a; background: white; }
+#server-workspace-dialog::backdrop { background: #0008; }
+.server-workspace-heading, .server-workspace-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: .7rem; }
+.server-workspace-heading { justify-content: space-between; }
+.server-workspace-heading h2 { font: 600 1.35rem system-ui, sans-serif; margin: 0; }
+.server-workspace-row input, .server-workspace-row select { flex: 1; }
+#server-workspace-connect label { display: block; }
+#server-workspace-token { width: 75%; margin-bottom: .7rem; }
+#server-document-list { list-style: none; padding: 0; max-height: 30vh; overflow: auto; }
+#server-document-list button { display: block; width: 100%; text-align: left; margin-bottom: .35rem; overflow-wrap: anywhere; }
+#server-document-banner { position: fixed; left: 1rem; bottom: 2.5rem; right: 12rem; z-index: 1030; display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; padding: .5rem; border: 1px solid #8d99a7; border-radius: .5rem; background: #edf6ff; color: #17202a; max-height: 25vh; overflow: auto; box-shadow: 0 2px 10px #0002; }
+#server-document-label { overflow-wrap: anywhere; }
+#server-document-message, #server-workspace-message { overflow-wrap: anywhere; color: #813700; }
+@media (max-width: 700px) { #server-document-banner { left: .3rem; right: .3rem; bottom: 5.5rem; } }

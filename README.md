@@ -101,6 +101,7 @@ Other options:
 | :--- | :--- |
 | PWA or static web hosting | [Installation](wiki/Installation.md) |
 | Docker | [Docker Deployment](wiki/Docker-Deployment.md) |
+| Shared server workspaces and agent access | [Server Workspaces, REST API, and MCP](wiki/Server-Workspaces.md) |
 | Cloudflare Pages, KV, and Durable Objects | [Configuration](wiki/Configuration.md) |
 | Neutralino desktop application | [Desktop Application](wiki/Desktop-App.md) |
 
@@ -110,7 +111,8 @@ Markdown Viewer is local-first, not network-free. The following table shows the 
 
 | Workflow | Default data path |
 | :--- | :--- |
-| Editing, local imports, Preview, Workspace autosave, and most exports | On the device |
+| Editing, local imports, Preview, browser-local Workspace autosave, and most exports | On the device |
+| Opt-in self-hosted server workspaces | Authenticated REST/MCP and explicit browser saves to persistent SQLite on your server; see [Server Workspaces](wiki/Server-Workspaces.md) |
 | Web libraries and uncached renderer dependencies | CDN requests in the web/PWA build |
 | GitHub import and emoji lookup | Public content uses GitHub APIs and raw-content hosts; private content uses an optional PAT only with `api.github.com` |
 | PlantUML, D2, Graphviz, Vega-Lite, WaveDrom, and some diagram previews | Diagram source can be sent to PlantUML, Kroki, or mermaid.ink |

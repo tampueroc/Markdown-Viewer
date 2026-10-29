@@ -11,6 +11,7 @@ function setup() {
   const state = {
     workspaceMaintenancePending: false, suspendWorkspacePersistence: false,
     workspaceMaintenancePreviousInert: false, nativeMarkdownSaveInProgress: false,
+    tabs: [], getServerDocumentSnapshot: tab => tab.serverDocument ? { dirty: tab.dirty } : null,
     liveCollaboration: null, linkedReadEpoch: 0, linkedLocationScanTokens: new Map([['root', {}]]),
     linkedSourceRefreshTimers: new Map(), saveTabStateTimeout: null, secretWorkspaceSaveTimeout: null,
     linkedMutationOperations: new Set(), documentDeletionChain: Promise.resolve(),
@@ -58,6 +59,14 @@ test('live collaboration prevents maintenance without taking ownership', async (
   const { state, container } = setup(); state.liveCollaboration = {};
   await assert.rejects(state.begin(), /live collaboration/);
   assert.equal(state.workspaceMaintenancePending, false); assert.equal(container.inert, false);
+});
+
+test('unsaved server drafts prevent local workspace replacement', async () => {
+  const { state, container } = setup();
+  state.tabs.push({ serverDocument: {}, dirty: true });
+  await assert.rejects(state.begin(), /unsaved server documents/);
+  assert.equal(state.workspaceMaintenancePending, false);
+  assert.equal(container.inert, false);
 });
 
 test('ending maintenance preserves an existing inert state', async () => {

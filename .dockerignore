@@ -6,6 +6,12 @@
 desktop-app
 wiki
 node_modules
+.env
+.env.*
+workspace-tokens.json
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 *.md
 # Runtime assets referenced by the service worker and linked-workspace guide.
 !sample.md

@@ -192,7 +192,7 @@ See [Live Share](Live-Share-Cloudflare.md) for runtime flow and limits.
 
 ## Docker and Nginx
 
-The root Docker build serves static files with Nginx on port 80. The default `docker-compose.yml` exposes container port 80 for a reverse proxy without binding a host port. For standalone local access, add `-f docker-compose.local.yml` after `-f docker-compose.yml`; the optional override publishes `127.0.0.1:8080:80` (change the local port with `MARKDOWN_VIEWER_PORT`).
+The root Docker build serves static files with Nginx on port 80. The default `docker-compose.yml` also builds an authenticated Node/SQLite workspace API, persists `/data` in `workspace-data`, and requires runtime `WORKSPACE_PUBLIC_ORIGIN` and secret `WORKSPACE_TOKENS_JSON`. Only frontend container port 80 is exposed to the proxy; no host ports are bound. For standalone local access, add `-f docker-compose.local.yml` after `-f docker-compose.yml`; the override publishes `127.0.0.1:8080:80` (set both `MARKDOWN_VIEWER_PORT` and the matching origin for another port). See [Server Workspaces](Server-Workspaces.md) for REST, MCP, permissions, storage, and backup configuration.
 
 Security headers configured in Docker/Nginx documentation include:
 
@@ -208,7 +208,7 @@ Cloudflare Pages reads the root `_headers`, `_redirects`, and `_routes.json` fil
 
 Search metadata is generated for the root English URL and every supported `?lang=` URL. Each page has a self-canonical URL, reciprocal `hreflang` links, localized Open Graph/Twitter metadata, and localized structured data; `sitemap.xml` contains the complete alternate-language matrix. Run `npm run check:seo` to verify the committed sitemap or `npm run seo:sitemap` after changing `seo/locales.mjs`.
 
-The root Dockerfile includes all Service Worker precache assets, `native-markdown-source.js`, and a checked Nginx configuration. Nginx revalidates unversioned assets with `Cache-Control: no-cache` and returns real `404` responses for missing assets and unimplemented API/Live Share routes. Its CSP is aligned with the HTML meta policy. See [Docker Deployment](Docker-Deployment.md) for container checks and Coolify/LAN HTTPS setup.
+The root Dockerfile includes all Service Worker precache assets, `native-markdown-source.js`, and a checked Nginx configuration. Nginx revalidates unversioned assets with `Cache-Control: no-cache` and proxies the workspace API and MCP, and returns real `404` responses for missing assets and unimplemented Cloudflare API/Live Share routes. Its CSP is aligned with the HTML meta policy. See [Docker Deployment](Docker-Deployment.md) for container checks and Coolify/LAN HTTPS setup.
 
 ## Neutralino Desktop Configuration
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'markdown-viewer-cache-v3.10.4';
+const CACHE_NAME = 'markdown-viewer-cache-v3.10.4-server-workspaces-v1';
 
 // PERF-011: Split precache into critical (local files) and lazy (CDN libraries)
 // Critical assets are precached during SW install for instant offline startup
@@ -9,6 +9,8 @@ const CRITICAL_ASSETS = [
   './visual-settings-adapters.js',
   './visual-settings-store.js',
   './script.js',
+  './server-workspaces.js',
+  './server-workspaces.css',
   './preview-worker.js',
   './styles.css',
   './assets/seo-metadata.mjs',
@@ -36,6 +38,8 @@ const NETWORK_FIRST_LOCAL_PATHS = new Set([
   '/visual-settings-adapters.js',
   '/visual-settings-store.js',
   '/script.js',
+  '/server-workspaces.js',
+  '/server-workspaces.css',
   '/preview-worker.js',
   '/styles.css',
   '/assets/seo-metadata.mjs',
@@ -70,6 +74,11 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   const isLocal = url.origin === self.location.origin;
   const isCDN = CDN_ORIGINS.some(origin => url.hostname.includes(origin));
+
+  // Authenticated workspaces and MCP must never enter a shared/offline cache,
+  // and non-GET requests must never be replayed by this worker.
+  if (event.request.method !== 'GET' || event.request.headers.has('Authorization') ||
+      (isLocal && /^\/(?:api(?:\/|$)|mcp(?:\/|$))/.test(url.pathname))) return;
 
   if (isLocal) {
     const localPath = url.pathname.endsWith('/') ? '/' : url.pathname;

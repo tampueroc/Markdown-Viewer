@@ -15,6 +15,7 @@ function setup() {
     workspacePersistenceChain: Promise.resolve(), shareSnapshotViewOnlyTabIds: new Set(), tabHistories: {}, console,
     workspaceStorage: { deleteDocument: async id => deleted.push(id) },
     _flushTabsToStorage: () => new Promise(resolve => gates.push(resolve)),
+    getServerDocumentSnapshot: () => null,
     isPrivateStorageMode: () => false, isTemporaryDocument: () => false };
   for (const name of ['saveSecondarySplitState', 'markReleaseNotesSeen', 'clearDirtyDocumentJournal',
     'renderDocumentSplitView', 'renderTabBar', 'closeReviewComposer', 'renderReviewPanel', 'renderDocumentSidebar', 'showAppToast']) context[name] = () => {};

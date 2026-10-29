@@ -4,10 +4,12 @@ FROM nginx:alpine
 COPY index.html 404.html /usr/share/nginx/html/
 COPY workspace-storage.js visual-settings-adapters.js visual-settings-store.js /usr/share/nginx/html/
 COPY script.js native-markdown-source.js preview-worker.js styles.css sw.js /usr/share/nginx/html/
+COPY server-workspaces.js server-workspaces.css /usr/share/nginx/html/
 COPY sample.md RELEASE_NOTES manifest.json robots.txt sitemap.xml /usr/share/nginx/html/
 COPY assets/ /usr/share/nginx/html/assets/
 COPY seo/locales.mjs seo/welcome-content.mjs /usr/share/nginx/html/seo/
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY server/nginx-workspace-proxy.conf /etc/nginx/workspace-proxy.conf
 
 # Validate the configuration at build time as well as container startup.
 RUN nginx -t
