@@ -51,7 +51,15 @@ docker build -t markdown-viewer:local .
 docker run -d --name markdown-viewer-local -p 8080:80 markdown-viewer:local
 ```
 
-The root `.dockerignore` excludes desktop build output and unrelated local files from the web container.
+The root `.dockerignore` excludes desktop build output and unrelated local files from the web container, while retaining runtime Markdown assets. The publishing workflow targets `linux/amd64` and `linux/arm64`; a local build uses the Docker host's architecture.
+
+Validate packaging, MIME types, caching, and missing-route responses against a real container:
+
+```bash
+npm run test:docker
+```
+
+This requires a running Docker daemon but no installed npm dependencies. The check builds a temporary image, runs it on a dynamically allocated loopback port, and removes the container and image afterward.
 
 ## What the Container Provides
 
@@ -61,21 +69,11 @@ On `localhost`, managed-media and stored Share Snapshot requests use the product
 
 The container alone does not provide Cloudflare KV or Durable Objects. Self-hosted stored Share Snapshot and Live Share require separately deployed compatible endpoints.
 
-## Known Stock Image Limitation
+## Runtime Packaging and Optional Services
 
-The checked-in root `Dockerfile` does not copy:
+The image includes every critical Service Worker asset, including `preview-worker.js` and `sample.md`, plus the `native-markdown-source.js` script referenced by the page. JavaScript modules have an explicit JavaScript MIME type, and Markdown assets are served as plain text. Missing files return `404` rather than successful application HTML.
 
-- `preview-worker.js`; or
-- `sample.md`.
-
-Both files are listed in `sw.js` as critical precache assets. The consequences are:
-
-- Documents eligible for Preview Worker rendering receive a Worker load failure and fall back to main-thread rendering; and
-- Service Worker installation can fail because `cache.addAll()` rejects the complete precache when either asset returns `404`.
-
-This is an implementation packaging limitation, not a documentation configuration step. The documentation audit records it without changing Docker behavior.
-
-If you maintain a custom image, copy both files to `/usr/share/nginx/html/`, rebuild, and verify that every `CRITICAL_ASSETS` URL in `sw.js` returns `200` with the correct MIME type.
+The static container deliberately returns `404` for `/api`, `/api/*`, `/live-room`, and `/live-room/*`. Stored snapshots, managed-media uploads, and Live Share are **not available from this container alone**. Small URL-embedded snapshots do not require server storage. On LAN hostnames, API requests target the LAN origin, not the production API. Using the production API from a custom origin also requires compatible CORS/origin policy; changing a URL alone is not sufficient.
 
 ## Nginx and Headers
 
@@ -88,17 +86,30 @@ The Docker image uses `nginx:alpine`. Production deployments should keep these b
 - Send security headers that match the app's CSP and deployment policy. The current Docker image includes:
 
 ```nginx
-add_header X-Frame-Options "SAMEORIGIN" always;
+add_header X-Frame-Options "DENY" always;
 add_header X-Content-Type-Options "nosniff" always;
-add_header X-XSS-Protection "1; mode=block" always;
 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 ```
 
-The Dockerfile also sets a Content-Security-Policy with the external origins required by the web app. Review that policy when adding a renderer or changing lazy-loaded resources.
+`nginx.conf` sets a Content-Security-Policy aligned with the HTML meta policy, including `esm.sh`, media hosts, and the production sharing origins. Both policies are enforced by browsers, so update both when adding a renderer or changing lazy-loaded resources. Allowing an origin in CSP does not provision a sharing backend or grant CORS access.
 
 Cloudflare Pages deployments use the stricter root `_headers` and `_redirects` files, including CSP, HSTS, clickjacking, permissions, cross-origin, and sensitive-path protections. When self-hosting behind Docker or another reverse proxy, keep the CSP compatible with `index.html`, lazy-loaded renderers, Share Snapshot, and Live Share instead of copying a wildcard policy.
 
-Use long caching carefully. `sw.js`, `index.html`, `workspace-storage.js`, `script.js`, and `styles.css` are update-sensitive; stale versions can keep old app behavior alive.
+All responses use `Cache-Control: no-cache`: browsers may retain assets but must revalidate before reusing them online. The app uses unversioned filenames, so long-lived immutable caching is unsafe. The Service Worker can still use cached assets when offline. Keep reverse-proxy cache rules consistent with these response headers.
+
+## Coolify on a Mac Mini / LAN
+
+Coolify targets Linux, not native macOS. If the Mac mini runs macOS, use a supported Linux VM with Docker and Coolify, with networking that makes the proxy reachable from your LAN. On Apple Silicon, use an ARM64 Linux guest and build from source or use a published ARM64 image.
+
+1. Add this repository as a Coolify application using the **Dockerfile** build pack, repository-root context, and `/Dockerfile`.
+2. Set the application port to **80**. If configuring a health check, use HTTP `GET /` on port 80.
+3. Assign a dedicated root hostname, such as `markdown.home.example.com`, resolving to the Coolify host's LAN address. Replace this example with a domain you control.
+4. Terminate **trusted HTTPS** at Coolify's proxy. Use a DNS-validated certificate for your domain or a private CA trusted by every client device. A private-CA certificate without client trust is not sufficient. HTTP on a LAN IP is not a browser secure context; PWA/service workers, encrypted workspaces, and some clipboard features require HTTPS.
+5. Do not expose a separate public application port or forward router ports unless you intend external access. The Compose file's `8080:80` mapping is for standalone deployment, not needed behind Coolify's application proxy.
+
+No database, application environment variables, or persistent volume are required. Workspace documents remain in each browser's IndexedDB, **not on the Mac mini**. Different devices and browser profiles do not share a persistent workspace. Back up through workspace ZIP exports; container or VM backups do not capture client browser documents. Keep the hostname, scheme, and port stable because browser storage is origin-specific.
+
+Self-hosting still uses CDN dependencies and some external diagram services. It is not an air-gapped deployment. See the privacy notes below.
 
 ## Reverse Proxy Examples
 

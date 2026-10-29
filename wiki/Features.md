@@ -529,7 +529,7 @@ Limitations:
 - First use of CDN-based renderers requires network access unless already cached.
 - Clearing site data removes the cached app shell and local documents.
 - Opening `index.html` through `file://` can break workers and service workers because of browser security rules.
-- The checked-in root Dockerfile does not copy `preview-worker.js` or `sample.md`, although the Service Worker precache requires both. The stock container therefore falls back to main-thread Preview for large Documents and can fail Service Worker installation until the image is corrected.
+- Older Docker images omitted Preview Worker and precache assets. The current Dockerfile includes them; rebuild or use an updated image. See [Docker Deployment](Docker-Deployment.md) for verification and LAN HTTPS requirements.
 
 ## Desktop Application
 

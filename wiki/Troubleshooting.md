@@ -54,14 +54,14 @@ Large Documents above 50,000 characters can use the Preview Worker when their st
 
 ## Docker Preview or PWA Offline Support Is Incomplete
 
-The checked-in root `Dockerfile` does not copy `preview-worker.js` or `sample.md`, but `sw.js` includes both in its critical precache. In the stock image:
+Older images omitted `preview-worker.js` and `sample.md`. The current root Dockerfile includes both, plus the native-source script referenced by the page. Rebuild from this branch or pull an image built from the updated Dockerfile; an older published image is not fixed by updating documentation.
 
-- large-document Preview can fall back to the main thread after the Worker request fails; and
-- Service Worker installation can fail because `cache.addAll()` requires every critical asset.
+- Run `npm run test:docker` with a running Docker daemon to check runtime packaging, MIME types, and cache headers.
+- Verify every critical asset in `sw.js` returns `200` with the correct content, not application HTML.
+- Use trusted HTTPS for LAN access. Service workers work on `localhost`, but not ordinary HTTP LAN IPs or hostnames.
+- If upgrading from an image with one-year immutable caching, bypass the cache once with a hard reload. Check for old Service Worker registrations and caches if problems persist; do not clear IndexedDB or site data without a workspace backup, as that deletes documents.
 
-This is a known product packaging limitation at the audited commit. A documentation-only change does not modify the image.
-
-For a custom image, serve every file in the [Installation: Static Hosting](Installation.md#static-hosting) list and verify that each Service Worker critical asset returns `200` with the correct MIME type.
+For a custom image, serve every file in the [Installation: Static Hosting](Installation.md#static-hosting) list. See [Docker Deployment](Docker-Deployment.md) for Coolify and reverse-proxy setup.
 
 ## A Local Markdown File Will Not Import
 

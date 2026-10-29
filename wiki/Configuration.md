@@ -208,7 +208,7 @@ Cloudflare Pages reads the root `_headers`, `_redirects`, and `_routes.json` fil
 
 Search metadata is generated for the root English URL and every supported `?lang=` URL. Each page has a self-canonical URL, reciprocal `hreflang` links, localized Open Graph/Twitter metadata, and localized structured data; `sitemap.xml` contains the complete alternate-language matrix. Run `npm run check:seo` to verify the committed sitemap or `npm run seo:sitemap` after changing `seo/locales.mjs`.
 
-The checked-in root Dockerfile does not copy `preview-worker.js` or `sample.md`; see [Docker Deployment: Known Stock Image Limitation](Docker-Deployment.md#known-stock-image-limitation).
+The root Dockerfile includes all Service Worker precache assets, `native-markdown-source.js`, and a checked Nginx configuration. Nginx revalidates unversioned assets with `Cache-Control: no-cache` and returns real `404` responses for missing assets and unimplemented API/Live Share routes. Its CSP is aligned with the HTML meta policy. See [Docker Deployment](Docker-Deployment.md) for container checks and Coolify/LAN HTTPS setup.
 
 ## Neutralino Desktop Configuration
 

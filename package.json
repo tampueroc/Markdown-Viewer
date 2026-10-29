@@ -17,6 +17,7 @@
     "seo:sitemap": "node seo/generate-sitemap.mjs",
     "test": "npm run build && npm run test:unit && npm run test:e2e",
     "test:unit": "node --test tests/unit/*.test.mjs",
+    "test:docker": "node tests/helpers/docker-smoke-check.mjs",
     "test:install": "playwright install chromium firefox webkit",
     "test:e2e": "playwright test --project=chromium",
     "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.js --project=chromium",

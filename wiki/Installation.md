@@ -71,7 +71,7 @@ docker compose up -d --build
 
 The Docker image serves static files with Nginx. It does not magically provide Cloudflare KV or Durable Objects; deploy those separately if you want stored Share Snapshot or Live Share.
 
-> **Known limitation:** The checked-in root `Dockerfile` does not copy `preview-worker.js` or `sample.md`, while `sw.js` expects both during critical precache. The stock image can use main-thread Preview fallback, but large-Document Worker rendering and PWA/offline installation are incomplete. This documentation audit does not change Docker behavior. See [Docker Deployment](Docker-Deployment.md#known-stock-image-limitation).
+> The current Dockerfile includes the Preview Worker and all critical Service Worker assets. Older images may omit them; rebuild to receive the fix. LAN deployments need trusted HTTPS for PWA/offline support. See [Docker Deployment](Docker-Deployment.md) for Coolify setup and container checks.
 
 ## Static Hosting
 

@@ -9,6 +9,3 @@ services:
       - "8080:80"
     container_name: markdown-viewer
     restart: unless-stopped
-    environment:
-      - NGINX_HOST=localhost
-      - NGINX_PORT=80
