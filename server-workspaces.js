@@ -60,13 +60,33 @@
     return value;
   }
 
+  const bannerElement = el('server-document-banner');
+  const bannerLabel = el('server-document-label');
+  const saveButton = el('server-document-save');
+  const reloadButton = el('server-document-reload');
+  let bannerQueued = false;
+
   function banner() {
-    const doc = bridge()?.active();
-    el('server-document-banner').hidden = !doc;
+    // Status contains metadata only; full Markdown snapshots are for explicit saves.
+    const doc = bridge()?.activeStatus();
+    const hidden = !doc;
+    if (bannerElement.hidden !== hidden) bannerElement.hidden = hidden;
     if (!doc) return;
-    el('server-document-label').textContent = (doc.workspaceName || doc.workspace_id) + ' / ' + doc.path + ' · revision ' + doc.revision + (doc.dirty ? ' · UNSAVED' : ' · saved') + (doc.readOnly ? ' · read only' : '');
-    el('server-document-save').disabled = busy || !token || doc.readOnly || !doc.dirty;
-    el('server-document-reload').disabled = busy || !token;
+    const label = (doc.workspaceName || doc.workspace_id) + ' / ' + doc.path + ' · revision ' + doc.revision + (doc.dirty ? ' · UNSAVED' : ' · saved') + (doc.readOnly ? ' · read only' : '');
+    if (bannerLabel.textContent !== label) bannerLabel.textContent = label;
+    const saveDisabled = Boolean(busy || !token || doc.readOnly || !doc.dirty);
+    const reloadDisabled = Boolean(busy || !token);
+    if (saveButton.disabled !== saveDisabled) saveButton.disabled = saveDisabled;
+    if (reloadButton.disabled !== reloadDisabled) reloadButton.disabled = reloadDisabled;
+  }
+
+  function queueBanner() {
+    if (bannerQueued) return;
+    bannerQueued = true;
+    requestAnimationFrame(() => {
+      bannerQueued = false;
+      banner();
+    });
   }
 
   async function run(action) {
@@ -200,8 +220,10 @@
   }));
   function ready() {
     el('server-workspace-launcher').disabled = false;
-    document.getElementById('markdown-editor')?.addEventListener('input', banner);
-    setInterval(banner, 500);
+    document.addEventListener('input', event => {
+      if (event.target.id === 'markdown-editor' || event.target.id === 'document-split-editor') queueBanner();
+    });
+    window.addEventListener('markdown-viewer:server-document-changed', queueBanner);
     banner();
   }
   if (bridge()) ready(); else window.addEventListener('markdown-viewer:ready', ready, { once: true });

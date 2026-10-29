@@ -108,6 +108,63 @@ test('closing or disconnecting an unsaved server tab requires preserving or expl
   await expect(page.locator('#server-document-banner')).toBeVisible();
 });
 
+test('server workspace UI does no idle polling, snapshot reads, requests or banner rewrites', async ({ page }) => {
+  const ws = await api('/api/workspaces', 'POST', { name: 'Idle performance' });
+  await api(`/api/workspaces/${ws.id}/documents`, 'POST', { path: 'large.md', content: '# Large document\n\n' + 'Plain text paragraph.\n\n'.repeat(4000) });
+  await openApp(page);
+  await connect(page);
+  await page.getByRole('button', { name: 'large.md · r1', exact: true }).click();
+  await expect(page.locator('#server-document-banner')).toBeVisible();
+  await expect(page.locator('#server-workspace-dialog')).not.toBeVisible();
+  // Let one-off startup/preview work finish before observing steady-state work.
+  await page.waitForTimeout(1000);
+  await page.evaluate(() => {
+    const original = window.MarkdownViewerServerDocuments;
+    window.__serverUiWork = { snapshots: 0, statuses: 0, mutations: 0 };
+    window.MarkdownViewerServerDocuments = Object.freeze({ ...original,
+      active: () => { window.__serverUiWork.snapshots++; return original.active(); },
+      activeStatus: () => { window.__serverUiWork.statuses++; return original.activeStatus(); }
+    });
+    const observer = new MutationObserver(records => { window.__serverUiWork.mutations += records.length; });
+    observer.observe(document.getElementById('server-document-banner'), { childList: true, subtree: true, characterData: true, attributes: true });
+    const status = original.activeStatus();
+    if ('content' in status) throw new Error('Banner status must not expose document content');
+  });
+  let apiRequests = 0;
+  page.on('request', request => { if (/\/(?:api\/workspaces|mcp)(?:[/?]|$)/.test(new URL(request.url()).pathname)) apiRequests++; });
+  await page.waitForTimeout(1600);
+  expect(await page.evaluate(() => window.__serverUiWork)).toEqual({ snapshots: 0, statuses: 0, mutations: 0 });
+  expect(apiRequests).toBe(0);
+  // Even redundant state notifications should coalesce and leave identical DOM alone.
+  await page.evaluate(async () => {
+    for (let i = 0; i < 100; i++) window.dispatchEvent(new Event('markdown-viewer:server-document-changed'));
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  });
+  expect(await page.evaluate(() => window.__serverUiWork)).toEqual({ snapshots: 0, statuses: 1, mutations: 0 });
+});
+
+test('event-driven banner follows edits, tab switches, saves and closing without polling', async ({ page }) => {
+  const ws = await api('/api/workspaces', 'POST', { name: 'Event updates' });
+  await api(`/api/workspaces/${ws.id}/documents`, 'POST', { path: 'events.md', content: 'initial' });
+  await openApp(page);
+  await connect(page);
+  await page.getByRole('button', { name: 'events.md · r1', exact: true }).click();
+  await expect(page.locator('#server-workspace-dialog')).not.toBeVisible();
+  await expect(page.locator('#server-document-label')).toContainText('revision 1 · saved');
+  const tabId = await page.evaluate(() => window.MarkdownViewerServerDocuments.activeStatus().tabId);
+  await page.locator('#markdown-editor').fill('edited');
+  await expect(page.locator('#server-document-label')).toContainText('UNSAVED');
+  await page.locator('#tab-list .tab-item:not(.active)').first().click();
+  await expect(page.locator('#server-document-banner')).toBeHidden();
+  await page.locator(`#tab-list .tab-item[data-tab-id="${tabId}"]`).click();
+  await expect(page.locator('#server-document-banner')).toBeVisible();
+  await expect(page.locator('#server-document-label')).toContainText('UNSAVED');
+  await page.getByRole('button', { name: 'Save to server', exact: true }).click();
+  await expect(page.locator('#server-document-label')).toContainText('revision 2 · saved');
+  await page.locator('#tab-list .tab-item.active .tab-close-btn').click();
+  await expect(page.locator('#server-document-banner')).toBeHidden();
+});
+
 test('typing during an in-flight save remains an unsaved draft after the save succeeds', async ({ page }) => {
   const ws = await api('/api/workspaces', 'POST', { name: 'Concurrent edits' });
   await api(`/api/workspaces/${ws.id}/documents`, 'POST', { path: 'concurrent.md', content: 'initial' });

@@ -13705,6 +13705,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   function renderTabBar(tabsArr, currentActiveTabId) {
     const tabList = document.getElementById('tab-list');
     if (!tabList) return;
+    if (window.MarkdownViewerServerDocuments) window.dispatchEvent(new Event('markdown-viewer:server-document-changed'));
     closeTabMenus();
     removeTabMenuDropdowns();
     // PERF-007: Use textContent instead of innerHTML to clear elements faster
@@ -35275,15 +35276,30 @@ ${selector} .arrowheadPath {
 
   // Server documents are explicitly opened, temporary editor sessions. Their
   // Markdown is saved only through the authenticated server API, never IndexedDB.
+  function getServerDocumentContent(tab) {
+    return tab.id === activeTabId ? markdownEditor.value
+      : tab.id === secondarySplitTabId && documentSplitEditor ? documentSplitEditor.value : tab.content;
+  }
+
   function getServerDocumentSnapshot(tab) {
     if (!tab || !tab.serverDocument) return null;
-    const content = tab.id === activeTabId ? markdownEditor.value
-      : tab.id === secondarySplitTabId && documentSplitEditor ? documentSplitEditor.value : tab.content;
+    const content = getServerDocumentContent(tab);
     return Object.assign({}, tab.serverDocument, { tabId: tab.id, content: content, dirty: content !== tab.serverDocument.content });
+  }
+
+  function getServerDocumentStatus(tab) {
+    if (!tab || !tab.serverDocument) return null;
+    const doc = tab.serverDocument;
+    return {
+      tabId: tab.id, id: doc.id, workspace_id: doc.workspace_id,
+      path: doc.path, workspaceName: doc.workspaceName, revision: doc.revision,
+      readOnly: doc.readOnly, dirty: getServerDocumentContent(tab) !== doc.content
+    };
   }
 
   window.MarkdownViewerServerDocuments = Object.freeze({
     active: function() { return getServerDocumentSnapshot(tabs.find(function(tab) { return tab.id === activeTabId; })); },
+    activeStatus: function() { return getServerDocumentStatus(tabs.find(function(tab) { return tab.id === activeTabId; })); },
     snapshots: function() { return tabs.map(getServerDocumentSnapshot).filter(Boolean); },
     snapshot: function(tabId) { return getServerDocumentSnapshot(tabs.find(function(tab) { return tab.id === tabId; })); },
     open: async function(doc) {
@@ -35318,6 +35334,7 @@ ${selector} .arrowheadPath {
       // Only advance the saved baseline. Typing during the request stays dirty.
       tab.serverDocument = Object.assign({}, tab.serverDocument, doc);
       updateSaveStatus('saved');
+      window.dispatchEvent(new Event('markdown-viewer:server-document-changed'));
     },
     disconnect: function() {
       const remote = tabs.filter(function(tab) { return tab.serverDocument; });
