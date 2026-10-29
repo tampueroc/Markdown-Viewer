@@ -35254,6 +35254,275 @@ ${selector} .arrowheadPath {
     applyVisualSettings(initialVisualSettings, '*');
   }
 
+  installAgentIntegration();
+
   document.documentElement.dataset.appReady = 'true';
   window.dispatchEvent(new Event('markdown-viewer:ready'));
+
+  // Agent integration (Firefox MCP bridge). Agents see only the normal
+  // workspace; secret, temporary, shared and release-notes documents are excluded.
+  function installAgentIntegration() {
+    const integration = window.MarkdownViewerAgentIntegration;
+    if (!integration || typeof integration.install !== 'function' || hasDesktopFileAccess()) return;
+    try {
+      integration.install(createAgentDocumentService(integration.AgentError));
+    } catch (error) {
+      console.warn('Agent integration unavailable:', error);
+    }
+  }
+
+  function createAgentDocumentService(AgentError) {
+    function fail(code, message) { throw new AgentError(code, message); }
+
+    function isAgentVisible(tab) {
+      return Boolean(tab && tab.id && !isTemporaryDocument(tab) && !isReleaseNotesTab(tab) &&
+        tab.workspaceId === DEFAULT_WORKSPACE_ID && !isLinkedWorkspaceDocument(tab));
+    }
+
+    function agentTabs() {
+      return tabs.filter(isAgentVisible);
+    }
+
+    function requireTab(documentId) {
+      const tab = tabs.find(function(item) { return item.id === documentId; });
+      if (!isAgentVisible(tab)) fail('DOCUMENT_NOT_FOUND', 'Document not found.');
+      return tab;
+    }
+
+    function revisionOf(tab) {
+      const value = Number(tab._storageRevision);
+      return 'rev_' + (Number.isSafeInteger(value) && value >= 0 ? value : 0);
+    }
+
+    function isSecondaryEditorVisible(tab) {
+      return Boolean(tab && tab.id === secondarySplitTabId && documentSplitEditor && documentSplitPane && !documentSplitPane.hidden);
+    }
+
+    // Content and editor input that has not been committed to workspace storage.
+    function hasUnsavedChanges(tab) {
+      if (tab.id === activeTabId && markdownEditor.value !== tab.content) return true;
+      if (isSecondaryEditorVisible(tab) && documentSplitEditor.value !== tab.content) return true;
+      return tab.contentLoaded !== false && typeof tab.content === 'string' && tab._persistedContent !== tab.content;
+    }
+
+    // Reading must not change editor or document state, so this never calls ensureTabContent.
+    async function contentOf(tab) {
+      if (tab.id === activeTabId) return markdownEditor.value;
+      if (isSecondaryEditorVisible(tab)) return documentSplitEditor.value;
+      if (tab.contentLoaded !== false && typeof tab.content === 'string') return tab.content;
+      if (!workspaceStorage) return '';
+      try {
+        return await workspaceStorage.loadDocumentContent(tab.id);
+      } catch (_) {
+        fail('STORAGE_FAILURE', 'The document could not be read from workspace storage.');
+      }
+    }
+
+    function metadataOf(tab) {
+      const modified = Number(tab.lastEditedAt || tab.updatedAt || tab.createdAt);
+      return {
+        id: tab.id,
+        name: tab.title || 'Untitled',
+        folder_id: tab.folderId || null,
+        type: 'markdown',
+        modified_at: Number.isFinite(modified) && modified > 0 ? new Date(modified).toISOString() : null,
+        revision: revisionOf(tab),
+        is_open: isTabOpen(tab),
+        is_active: tab.id === activeTabId
+      };
+    }
+
+    function agentFolders() {
+      return (documentOrganization ? documentOrganization.folders : []).filter(function(folder) {
+        return folder && folder.workspaceId === DEFAULT_WORKSPACE_ID;
+      });
+    }
+
+    function requireWritableWorkspace() {
+      if (!workspaceStorage || isPrivateStorageMode()) {
+        fail('UNSUPPORTED_OPERATION', 'Agent changes require persistent workspace storage. Private mode is not supported.');
+      }
+      if (document.documentElement.dataset.workspaceStorageState !== 'ready' || workspaceMaintenancePending || suspendWorkspacePersistence) {
+        fail('STORAGE_FAILURE', 'Workspace storage is not available for changes right now.');
+      }
+    }
+
+    function requireWritableTab(tab) {
+      requireWritableWorkspace();
+      if (liveCollaboration && liveCollaboration.tabId === tab.id) {
+        fail('UNSUPPORTED_OPERATION', 'Documents in a live collaboration session cannot be changed by an agent.');
+      }
+      if (tab.id === activeTabId && !canMutateEditor()) {
+        fail('UNSUPPORTED_OPERATION', 'The document is read-only in the editor right now.');
+      }
+    }
+
+    function requireUpdatable(tab, expectedRevision) {
+      requireWritableTab(tab);
+      if (revisionOf(tab) !== expectedRevision) fail('REVISION_CONFLICT', 'The document has changed. Read it again before updating.');
+      if (hasUnsavedChanges(tab)) fail('UNSAVED_CHANGES', 'The document has unsaved editor changes. Try again after they are saved.');
+    }
+
+    function requireFolder(folderId) {
+      if (folderId === undefined || folderId === null) return null;
+      const folder = getFolderById(folderId);
+      if (!folder || folder.workspaceId !== DEFAULT_WORKSPACE_ID) fail('INVALID_PARAMETERS', 'Folder not found.');
+      return folder;
+    }
+
+    function sizeLabel(content) {
+      const bytes = new TextEncoder().encode(content).byteLength;
+      return bytes < 1024 ? bytes + ' bytes' : (bytes / 1024).toFixed(1) + ' KB';
+    }
+
+    return {
+      getWorkspaceInfo: function(mode) {
+        const workspace = getWorkspaceById(DEFAULT_WORKSPACE_ID);
+        return {
+          workspace_id: DEFAULT_WORKSPACE_ID,
+          workspace_name: workspace && workspace.name ? workspace.name : 'Workspace',
+          document_count: agentTabs().length,
+          folder_count: agentFolders().length,
+          permission_mode: mode,
+          writable: Boolean(workspaceStorage) && !isPrivateStorageMode(),
+          supported_operations: ['get_workspace_info', 'list_documents', 'read_document', 'search_documents', 'get_active_document']
+            .concat(mode === 'read-write' ? ['create_document', 'update_document'] : [])
+        };
+      },
+
+      listDocuments: function(options) {
+        const folderId = options.folder_id;
+        if (folderId) requireFolder(folderId);
+        const limit = options.limit || 100;
+        const matching = agentTabs().filter(function(tab) {
+          return !folderId || tab.folderId === folderId;
+        });
+        return {
+          documents: matching.slice(0, limit).map(metadataOf),
+          folders: agentFolders().map(function(folder) {
+            return { id: folder.id, name: folder.name || '', parent_id: folder.parentFolderId || null };
+          }),
+          total: matching.length,
+          truncated: matching.length > limit
+        };
+      },
+
+      readDocument: async function(documentId) {
+        const tab = requireTab(documentId);
+        const content = await contentOf(tab);
+        if (!tabs.includes(tab) || !isAgentVisible(tab)) fail('DOCUMENT_NOT_FOUND', 'Document not found.');
+        return Object.assign(metadataOf(tab), { content: content, has_unsaved_changes: hasUnsavedChanges(tab) });
+      },
+
+      searchDocuments: async function(query, limit) {
+        const needle = query.trim().toLowerCase();
+        const results = [];
+        for (const tab of agentTabs()) {
+          if (results.length >= limit) break;
+          const name = String(tab.title || '');
+          const content = await contentOf(tab);
+          const lower = content.toLowerCase();
+          const index = lower.indexOf(needle);
+          const titleMatch = name.toLowerCase().includes(needle);
+          if (index < 0 && !titleMatch) continue;
+          let snippet = '';
+          if (index >= 0 && lower.length === content.length) {
+            const start = Math.max(0, index - 80);
+            const end = Math.min(content.length, index + needle.length + 80);
+            snippet = (start > 0 ? '…' : '') + content.slice(start, end).replace(/\s+/g, ' ').trim() + (end < content.length ? '…' : '');
+          } else if (index >= 0) {
+            snippet = content.slice(0, 160).replace(/\s+/g, ' ').trim();
+          }
+          results.push({ document_id: tab.id, name: name || 'Untitled', snippet: snippet, title_match: titleMatch, revision: revisionOf(tab) });
+        }
+        return { results: results };
+      },
+
+      getActiveDocument: function() {
+        const tab = getActiveOpenDocument();
+        return { document: isAgentVisible(tab) ? metadataOf(tab) : null };
+      },
+
+      createDocument: async function(input, context) {
+        requireWritableWorkspace();
+        requireFolder(input.folder_id);
+        const name = input.name.trim();
+        await context.approve('Create a document named "' + name + '" (' + sizeLabel(input.content) + ').');
+        context.checkDeadline();
+        requireWritableWorkspace();
+        const folder = requireFolder(input.folder_id);
+        const tab = createTab(input.content, name, 'split', { workspaceId: DEFAULT_WORKSPACE_ID, folderId: folder ? folder.id : null });
+        normalizeTabDocumentMetadata(tab);
+        tab.isOpen = input.open === true;
+        tabs.push(tab);
+        const saved = await _flushTabsToStorage(tabs, { changedIds: [tab.id], requireExactCommit: true });
+        if (!saved) {
+          const index = tabs.indexOf(tab);
+          if (index >= 0 && !(Number(tab._storageRevision) > 0)) tabs.splice(index, 1);
+          renderDocumentSidebar();
+          fail('STORAGE_FAILURE', 'The document could not be saved.');
+        }
+        renderDocumentSidebar();
+        renderTabBar(tabs, activeTabId);
+        if (input.open === true) await switchTab(tab.id);
+        return { document_id: tab.id, name: tab.title, folder_id: tab.folderId || null, revision: revisionOf(tab), created: true };
+      },
+
+      updateDocument: async function(input, context) {
+        let tab = requireTab(input.document_id);
+        requireUpdatable(tab, input.expected_revision);
+        await context.approve('Replace the contents of "' + (tab.title || 'Untitled') + '" (' + sizeLabel(input.content) + ').');
+        // Let in-flight saves settle, then re-check everything because the user
+        // may have edited, saved, closed or moved the document during approval.
+        await workspacePersistenceChain.catch(function() {});
+        context.checkDeadline();
+        tab = requireTab(input.document_id);
+        requireUpdatable(tab, input.expected_revision);
+        if (tab.contentLoaded === false) {
+          // An evicted document's in-memory content must be loaded before replacing it.
+          await ensureTabContent(tab);
+          context.checkDeadline();
+          tab = requireTab(input.document_id);
+          requireUpdatable(tab, input.expected_revision);
+        }
+
+        const previousContent = tab.content;
+        const previousRevision = revisionOf(tab);
+        const isActive = tab.id === activeTabId;
+        tab.content = input.content;
+        tab.contentLoaded = true;
+        tab.lastEditedAt = Date.now();
+        if (isActive) {
+          markdownEditor.value = input.content;
+          pushProgrammaticHistoryState();
+          renderMarkdown({ reason: 'agent-update', force: true });
+          updateDocumentStats();
+          scheduleLineNumberUpdate({ force: true });
+        }
+        if (tab.id === secondarySplitTabId) renderDocumentSplitView();
+        const saved = await _flushTabsToStorage(tabs, { changedIds: [tab.id], requireExactCommit: true });
+        if (!saved) {
+          if (revisionOf(tab) !== previousRevision) {
+            // A newer version from another browser tab was kept. The app preserved
+            // the agent's version as a separate conflict copy.
+            fail('REVISION_CONFLICT', 'The document changed in another tab. Both versions were kept; read it again before updating.');
+          }
+          // Restore the persisted version if the user has not typed since.
+          if (tab.content === input.content && (!isActive || markdownEditor.value === input.content)) {
+            tab.content = previousContent;
+            if (isActive && tab.id === activeTabId) {
+              markdownEditor.value = previousContent;
+              pushProgrammaticHistoryState();
+              renderMarkdown({ reason: 'agent-update-reverted', force: true });
+              updateDocumentStats();
+            }
+            if (tab.id === secondarySplitTabId) renderDocumentSplitView();
+          }
+          fail('STORAGE_FAILURE', 'The document could not be saved.');
+        }
+        renderDocumentSidebar();
+        return { document_id: tab.id, updated: true, revision: revisionOf(tab) };
+      }
+    };
+  }
 });
